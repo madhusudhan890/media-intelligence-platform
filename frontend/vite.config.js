@@ -14,7 +14,10 @@ export default defineConfig({
   },
   define: {
     'import.meta.env.VITE_SIGNALING_URL': JSON.stringify(
-      process.env.VITE_SIGNALING_URL || 'ws://localhost:8080'
+      process.env.VITE_SIGNALING_URL || 'ws://localhost:8080/ws'
+    ),
+    'import.meta.env.VITE_MEDIA_SERVER_URL': JSON.stringify(
+      process.env.VITE_MEDIA_SERVER_URL || 'http://localhost:8080'
     )
   }
 });

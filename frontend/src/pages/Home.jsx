@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const SIGNALING_HTTP = import.meta.env.VITE_SIGNALING_URL
-  ? import.meta.env.VITE_SIGNALING_URL.replace('ws://', 'http://').replace('wss://', 'https://')
-  : 'http://localhost:8080';
+const MEDIA_SERVER_URL = import.meta.env.VITE_MEDIA_SERVER_URL || 'http://localhost:8080';
 
 function Home() {
   const navigate = useNavigate();
@@ -16,7 +14,7 @@ function Home() {
     setError('');
 
     try {
-      const response = await fetch(`${SIGNALING_HTTP}/rooms`, {
+      const response = await fetch(`${MEDIA_SERVER_URL}/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -26,7 +24,7 @@ function Home() {
       }
 
       const data = await response.json();
-      navigate(`/room/${data.roomId}`);
+      navigate(`/room/${data.roomId}`, { state: { fromHome: true } });
     } catch (err) {
       console.error('[Home] Failed to create room:', err);
       setError('Failed to create room. Is the signaling server running?');
@@ -42,7 +40,7 @@ function Home() {
       setError('Please enter a room ID');
       return;
     }
-    navigate(`/room/${trimmed}`);
+    navigate(`/room/${trimmed}`, { state: { fromHome: true } });
   };
 
   const handleKeyDown = (e) => {

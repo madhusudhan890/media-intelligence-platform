@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWebRTC from '../hooks/useWebRTC';
 import VideoPlayer from '../components/VideoPlayer';
 import Controls from '../components/Controls';
@@ -8,6 +8,7 @@ import ConnectionStatus from '../components/ConnectionStatus';
 function Room() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const cleanupRef = useRef(null);
   const {
     localStream,
@@ -25,6 +26,12 @@ function Room() {
   cleanupRef.current = cleanup;
 
   useEffect(() => {
+    // Prevent joining on refresh or direct URL access
+    if (!location.state?.fromHome) {
+      navigate('/', { replace: true });
+      return;
+    }
+
     console.log(`[${new Date().toISOString()}] [Room] Mounting — calling init()`);
     init();
     return () => {

@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
-const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:8080';
+const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:8080/ws';
+const MEDIA_SERVER_URL = import.meta.env.VITE_MEDIA_SERVER_URL || 'http://localhost:8080';
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 const RECONNECT_DELAY = 2000;
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -38,7 +39,8 @@ export default function useWebRTC(roomId) {
   const [error, setError] = useState(null);
 
   const wsRef = useRef(null);
-  const pcRef = useRef(null);
+  const pcRef = useRef(null); // P2P PeerConnection
+  const uplinkPcRef = useRef(null); // Uplink PeerConnection (Media Server)
   const localStreamRef = useRef(null);
   const peerIdRef = useRef(uuidv4());
   const roomIdRef = useRef(roomId);
@@ -78,7 +80,7 @@ export default function useWebRTC(roomId) {
     }
 
     if (pcRef.current) {
-      log('RTC', 'Closing PeerConnection', { signalingState: pcRef.current.signalingState, iceState: pcRef.current.iceConnectionState });
+      log('RTC', 'Closing P2P PeerConnection');
       pcRef.current.ontrack = null;
       pcRef.current.onicecandidate = null;
       pcRef.current.oniceconnectionstatechange = null;
@@ -87,6 +89,16 @@ export default function useWebRTC(roomId) {
       pcRef.current.onnegotiationneeded = null;
       pcRef.current.close();
       pcRef.current = null;
+    }
+
+    if (uplinkPcRef.current) {
+      log('UPLINK', 'Closing Uplink PeerConnection');
+      uplinkPcRef.current.onicecandidate = null;
+      uplinkPcRef.current.oniceconnectionstatechange = null;
+      uplinkPcRef.current.onconnectionstatechange = null;
+      uplinkPcRef.current.onsignalingstatechange = null;
+      uplinkPcRef.current.close();
+      uplinkPcRef.current = null;
     }
 
     forceStopAllMedia();
@@ -123,6 +135,93 @@ export default function useWebRTC(roomId) {
     }
   }, []);
 
+  const connectUplink = useCallback(async (stream) => {
+    if (uplinkPcRef.current) {
+      uplinkPcRef.current.close();
+    }
+
+    log('UPLINK', 'Creating new Uplink PeerConnection');
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    uplinkPcRef.current = pc;
+
+    // Add ONLY audio track for uplink
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) {
+      pc.addTransceiver(audioTrack, { direction: 'sendonly' });
+      log('UPLINK', 'Added audio track to uplink', { kind: audioTrack.kind, id: audioTrack.id.substring(0, 8) });
+    } else {
+      log('UPLINK', 'WARNING: No audio track available for uplink');
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      log('UPLINK', 'ICE connection state changed', { state: pc.iceConnectionState });
+      if (pc.iceConnectionState === 'failed') {
+        log('UPLINK', 'ICE FAILED — restarting ICE');
+        pc.restartIce();
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      log('UPLINK', 'Connection state changed', { state: pc.connectionState });
+    };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      logSDP('CREATED_UPLINK', 'offer', offer);
+
+      // Wait for ICE gathering to complete before sending (since media server doesn't support trickle via signaling yet)
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          const checkState = () => {
+            if (pc.iceGatheringState === 'complete') {
+              pc.removeEventListener('icegatheringstatechange', checkState);
+              resolve();
+            }
+          };
+          pc.addEventListener('icegatheringstatechange', checkState);
+          // Fallback timeout
+          setTimeout(() => {
+            pc.removeEventListener('icegatheringstatechange', checkState);
+            resolve();
+          }, 3000);
+        }
+      });
+
+      log('UPLINK', 'Sending offer to Media Server via HTTP POST');
+      const response = await fetch(`${MEDIA_SERVER_URL}/offer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roomId: roomIdRef.current,
+          peerId: peerIdRef.current,
+          sdp: pc.localDescription.sdp,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Media server responded with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      logSDP('RECEIVED_UPLINK', 'answer', { sdp: data.sdp });
+
+      await pc.setRemoteDescription(new RTCSessionDescription({
+        type: 'answer',
+        sdp: data.sdp,
+      }));
+      log('UPLINK', 'Remote description set (answer from media server)');
+
+    } catch (err) {
+      log('UPLINK', 'ERROR setting up uplink connection', { error: err.message });
+      // We don't set global error here to not break P2P if uplink fails
+    }
+  }, []);
+
   const createPeerConnection = useCallback((stream, targetPeerId) => {
     if (pcRef.current) {
       log('RTC', 'Closing existing PeerConnection before creating new one');
@@ -134,7 +233,7 @@ export default function useWebRTC(roomId) {
       pcRef.current.close();
     }
 
-    log('RTC', 'Creating new PeerConnection', { targetPeerId, iceServers: ICE_SERVERS[0].urls });
+    log('RTC', 'Creating new P2P PeerConnection', { targetPeerId, iceServers: ICE_SERVERS[0].urls });
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
     hasRemoteDescRef.current = false;
@@ -436,7 +535,7 @@ export default function useWebRTC(roomId) {
           remotePeerIdRef.current = fromPeerId;
 
           if (!pcRef.current) {
-            log('RTC', 'No existing PeerConnection, creating one for incoming offer');
+            log('RTC', 'No existing P2P PeerConnection, creating one for incoming offer');
             createPeerConnection(stream, fromPeerId);
           }
 
@@ -463,7 +562,7 @@ export default function useWebRTC(roomId) {
           setConnectionState('waiting');
 
           if (pcRef.current) {
-            log('RTC', 'Closing PeerConnection after peer left');
+            log('RTC', 'Closing P2P PeerConnection after peer left');
             pcRef.current.ontrack = null;
             pcRef.current.onicecandidate = null;
             pcRef.current.oniceconnectionstatechange = null;
@@ -551,7 +650,12 @@ export default function useWebRTC(roomId) {
 
       localStreamRef.current = stream;
       setLocalStream(stream);
+      
+      // Establish P2P signaling
       connectWebSocket(stream);
+      
+      // Establish uplink to Media Server
+      connectUplink(stream);
     } catch (err) {
       log('MEDIA', 'getUserMedia FAILED', { name: err.name, message: err.message });
       if (err.name === 'NotAllowedError') {
@@ -563,7 +667,7 @@ export default function useWebRTC(roomId) {
       }
       setConnectionState('failed');
     }
-  }, [connectWebSocket, forceStopAllMedia]);
+  }, [connectWebSocket, connectUplink, forceStopAllMedia]);
 
   const toggleAudio = useCallback(() => {
     if (localStreamRef.current) {
@@ -595,6 +699,9 @@ export default function useWebRTC(roomId) {
       }
       if (pcRef.current) {
         pcRef.current.close();
+      }
+      if (uplinkPcRef.current) {
+        uplinkPcRef.current.close();
       }
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close(1000, 'Page unload');
