@@ -1,0 +1,31 @@
+services:
+  signaling:
+    build:
+      context: ./signaling
+      dockerfile: Dockerfile
+    container_name: mip-signaling
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_SIGNALING_URL=ws://localhost:8080
+    container_name: mip-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      signaling:
+        condition: service_healthy
+    restart: unless-stopped
