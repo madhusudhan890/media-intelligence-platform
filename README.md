@@ -1,118 +1,705 @@
 # Real-Time Media Intelligence Platform
 
-> **Phase 1** — Peer-to-Peer Video/Audio Communication
-> **Phase 2** — Real-Time Media Processing Pipeline (Audio Uplink to Go + Kafka)
+An enterprise-grade, event-driven media intelligence platform that combines real-time WebRTC communication with AI-powered transcription and meeting analytics.
 
-A production-structured WebRTC communication platform designed as the foundation for a larger real-time media intelligence system. The system maintains reliable 1:1 peer-to-peer video and audio communication while establishing a secondary audio uplink to a backend media server for event streaming via Kafka.
+Users can join a video call, communicate through low-latency peer-to-peer audio/video streams, and receive live AI-generated insights including:
+
+- Meeting summaries
+- Action items
+- Decisions
+- Deadlines
+- Risks and blockers
+
+The platform is designed with a distributed architecture that separates media transport from AI workloads, ensuring that communication quality remains unaffected even during transcription or LLM processing.
 
 ---
 
-## Architecture
+# Key Engineering Highlights
 
+- WebRTC Peer-to-Peer Video & Audio Communication
+- Golang Signaling & Media Server (Pion WebRTC)
+- Kafka Event-Driven Architecture
+- Real-Time Speech-to-Text using Faster-Whisper
+- AI Meeting Intelligence using LLMs
+- Redis Sliding Context Window
+- Server-Sent Events (SSE) for Real-Time Updates
+- PostgreSQL Persistence Layer
+- Dockerized Local Development Environment
+- Hexagonal Architecture (Ports & Adapters)
+- Provider-Agnostic LLM Strategy Pattern
+- Fault-Tolerant Asynchronous Processing
+
+---
+
+# Why This Project Exists
+
+Traditional meeting platforms focus primarily on communication.
+
+This project explores how real-time media streams can be transformed into actionable intelligence using distributed systems, AI pipelines, and low-latency media processing.
+
+The goal is not simply video communication, but building a platform capable of understanding and extracting value from live media streams.
+
+This architecture creates a foundation for future capabilities such as:
+
+- Speaker intelligence
+- Sentiment analysis
+- Video intelligence
+- Face detection
+- Meeting engagement analytics
+- Multimodal AI systems
+
+---
+
+# System Context
+
+```mermaid
+flowchart LR
+
+UserA[User A]
+UserB[User B]
+
+Platform[Real-Time Media Intelligence Platform]
+
+UserA --> Platform
+UserB --> Platform
+
+Platform --> Kafka[Apache Kafka]
+Platform --> Redis[Redis]
+Platform --> Postgres[PostgreSQL]
+Platform --> LLM[LLM Provider]
 ```
-┌──────────────┐     WebSocket     ┌──────────────────┐     WebSocket     ┌──────────────┐
-│   Browser A  │◄────signaling────►│  Node.js Signal  │◄────signaling────►│   Browser B  │
-│  (React/Vite)│                   │    Server (ws)    │                   │  (React/Vite)│
-└──────┬───────┘                   └──────────────────┘                   └──────┬───────┘
-       │                                                                         │
-       │                    Direct WebRTC Connection                             │
-       │                    (Audio + Video P2P)                                  │
-       ├─────────────────────────────────────────────────────────────────────────┤
-       │                                                                         │
-       │ Audio Uplink (WebRTC)                             Audio Uplink (WebRTC) │
-       │                                                                         │
-       ▼                                                                         ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   Go Media Server                                      │
-│                                (Pion WebRTC + Kafka)                                   │
-└────────────────────────────────────────┬───────────────────────────────────────────────┘
-                                         │ Audio Chunks (5s intervals)
-                                         ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   Apache Kafka                                         │
-│                               (Topic: audio-chunks)                                    │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+
+---
+
+# High Level Architecture
+
+```mermaid
+flowchart TB
+
+subgraph Client Layer
+Frontend[React Frontend]
+end
+
+subgraph Communication Layer
+Media[Go Media Server<br/>Signaling & Audio Ingestion]
+end
+
+subgraph Event Layer
+Kafka[(Kafka)]
+end
+
+subgraph AI Processing Layer
+TW[Transcription Worker]
+AW[AI Insight Worker]
+SSE[SSE Broadcast Service]
+end
+
+subgraph Storage Layer
+Redis[(Redis)]
+Postgres[(PostgreSQL)]
+end
+
+Frontend <--> Media
+Frontend <--> SSE
+
+Media --> Kafka
+
+Kafka --> TW
+TW --> Kafka
+
+Kafka --> AW
+
+AW --> Redis
+
+TW --> Postgres
+AW --> Postgres
+
+Kafka --> SSE
 ```
 
-### Components
+---
 
-| Component | Technology | Port | Purpose |
-|-----------|-----------|------|---------|
-| **Frontend** | React 18 + Vite | 3000 | UI, WebRTC client (P2P + Uplink) |
-| **Signaling Server** | Node.js + Express | 8080 | Room management, P2P SDP/ICE relay |
-| **Media Server** | Golang + Pion | 8081 | Audio ingestion, chunking, Kafka publishing |
-| **Kafka/Zookeeper** | Confluent | 9092 | Event streaming pipeline |
+# End-to-End Architecture
+
+```mermaid
+graph TD
+
+A[Browser A]
+B[Browser B]
+
+A <-->|WebRTC Video + Audio| B
+
+A -->|Audio Uplink| Media[Go Media Server]
+B -->|Audio Uplink| Media
+
+Media --> Kafka[(Kafka)]
+
+Kafka --> TW[Whisper Worker]
+
+TW --> Kafka
+
+Kafka --> AW[AI Worker]
+
+AW --> Redis[(Redis)]
+
+TW --> Postgres[(Postgres)]
+AW --> Postgres
+
+Kafka --> SSE[SSE Service]
+
+SSE --> UI[React Dashboard]
+```
 
 ---
 
-## Why Separate the Media Uplink?
+# WebRTC Connection Flow
 
-This architecture deliberately decouples P2P communication from media processing:
-- **Zero Latency P2P:** Users communicate directly with each other without going through a central server, ensuring the lowest possible latency and best video quality.
-- **Dedicated Processing:** The Go media server only receives an audio uplink. It acts purely as an ingestion point, avoiding the complexity and overhead of an SFU (Selective Forwarding Unit) while still preparing the stream for backend AI processing.
-- **Event-Driven:** By chunking audio into Kafka, we create a robust, scalable event pipeline where various downstream workers (e.g., transcription, analytics) can consume the media independently.
+```mermaid
+sequenceDiagram
+
+participant A as Browser A
+participant S as Go Media Server (Signaling)
+participant B as Browser B
+
+A->>S: Join Room
+
+B->>S: Join Room
+
+S->>A: Peer Joined
+
+A->>B: SDP Offer
+B->>A: SDP Answer
+
+A->>B: ICE Candidate
+B->>A: ICE Candidate
+
+A<->>B: Video & Audio Streams
+```
 
 ---
 
-## WebRTC Flows
+# AI Processing Pipeline
 
-### Flow 1: P2P Communication
-(Same as Phase 1) Browser creates a full audio/video `RTCPeerConnection` and negotiates via the Node.js WebSocket signaling server.
+```mermaid
+flowchart LR
 
-### Flow 2: Audio Uplink
-When the user's media is acquired, the browser creates a *second* `RTCPeerConnection` configured as `sendonly` (audio only). It sends an SDP offer directly to the Go Media Server via `POST http://localhost:8081/offer` and receives the SDP answer in the HTTP response. The Go server then receives RTP packets, buffers them, and flushes them to Kafka every 5 seconds.
+Audio
+--> Whisper
+
+Whisper
+--> Transcript
+
+Transcript
+--> Redis
+
+Redis
+--> LLM
+
+LLM
+--> Insights
+
+Insights
+--> SSE
+
+SSE
+--> Dashboard
+```
 
 ---
 
-## Setup Instructions
+# Detailed Processing Sequence
 
-### Prerequisites
+```mermaid
+sequenceDiagram
 
-- [Docker](https://www.docker.com/get-started) and Docker Compose installed
+autonumber
 
-### Quick Start (Docker)
+participant Browser
+participant Media
+participant Kafka
+participant Whisper
+participant Redis
+participant LLM
+participant Postgres
+participant Frontend
+
+Browser->>Media: WebRTC RTP Audio
+
+Media->>Media: Buffer 5 Seconds
+
+Media->>Kafka: audio-chunks
+
+Kafka->>Whisper: Consume Chunk
+
+Whisper->>Whisper: Speech To Text
+
+Whisper->>Postgres: Store Transcript
+
+Whisper->>Kafka: transcripts
+
+Kafka->>Redis: Update Context Window
+
+Redis->>Redis: Keep Latest 10 Chunks
+
+Redis->>LLM: Context
+
+LLM->>Postgres: Store Insight
+
+LLM->>Kafka: ai-insights
+
+Kafka->>Frontend: SSE Update
+```
+
+---
+
+# Database Model
+
+```mermaid
+erDiagram
+
+MEETINGS ||--o{ TRANSCRIPTS : contains
+MEETINGS ||--o{ INSIGHTS : contains
+
+MEETINGS {
+    uuid id
+    string room_id
+    timestamp started_at
+    timestamp ended_at
+}
+
+TRANSCRIPTS {
+    uuid id
+    string room_id
+    string peer_id
+    text transcript
+    float confidence
+}
+
+INSIGHTS {
+    uuid id
+    string room_id
+    json payload
+}
+```
+
+---
+
+# Component Responsibilities
+
+| Component | Responsibility |
+|------------|------------|
+| React Frontend | User Interface |
+| Go Media Server | WebRTC Signaling & Audio Ingestion |
+| Kafka | Event Streaming |
+| Whisper Worker | Speech-to-Text |
+| AI Worker | Meeting Intelligence |
+| Redis | Sliding Context Window |
+| PostgreSQL | Long-Term Storage |
+| SSE Service | Real-Time Updates |
+
+---
+
+# Architecture Principles
+
+## 1. Media Isolation
+
+Real-time communication must never depend on AI workloads.
+
+Video and audio communication continue even if:
+
+- Kafka fails
+- Redis fails
+- Whisper crashes
+- LLM APIs become unavailable
+
+---
+
+## 2. Event-Driven Processing
+
+All AI workloads are asynchronous.
+
+Media traffic never waits for:
+
+- transcription
+- database writes
+- AI inference
+
+---
+
+## 3. Loose Coupling
+
+Each subsystem can evolve independently.
+
+- Signaling Layer
+- Media Layer
+- Kafka Layer
+- AI Layer
+- Frontend Layer
+
+---
+
+## 4. Incremental Scalability
+
+Architecture evolution path:
+
+```text
+P2P
+↓
+AI Analytics
+↓
+Speaker Intelligence
+↓
+Video Intelligence
+↓
+SFU
+↓
+Multi-Region Deployment
+```
+
+---
+
+# Technology Stack
+
+| Layer | Technology |
+|---------|---------|
+| Frontend | React 18 + Vite |
+| Signaling & Media | Golang + Pion + WebSockets |
+| Queue | Apache Kafka |
+| AI Workers | Python 3.11 |
+| Transcription | Faster-Whisper |
+| AI Engine | Groq/OpenAI/Gemini/Ollama |
+| Cache | Redis |
+| Database | PostgreSQL |
+| Streaming Updates | Server Sent Events |
+| Deployment | Docker Compose |
+
+---
+
+# Hexagonal Architecture
+
+The AI Worker subsystem follows Hexagonal Architecture.
+
+```text
+workers/app/
+├── domain/
+├── usecases/
+├── adapters/
+│   ├── kafka/
+│   ├── redis/
+│   ├── postgres/
+│   ├── whisper/
+│   └── llm/
+└── entrypoints/
+```
+
+Benefits:
+
+- Testability
+- Dependency inversion
+- Provider independence
+- Maintainability
+
+---
+
+# Adaptive LLM Strategy
+
+The platform supports multiple LLM providers through a Strategy Pattern.
+
+| Provider | Model |
+|-----------|-----------|
+| Groq | llama3-8b-8192 |
+| OpenAI | gpt-4o-mini |
+| Gemini | gemini-2.5-flash |
+| Ollama | llama3 |
+
+Provider selection:
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd media-intelligence-platform
+LLM_PROVIDER=groq
+```
 
-# Build and start all services
+Runtime switching requires no code changes.
+
+---
+
+# Kafka Topics
+
+| Topic | Purpose |
+|----------|----------|
+| audio-chunks | Raw audio payloads |
+| transcripts | Whisper outputs |
+| ai-insights | AI-generated meeting intelligence |
+
+---
+
+# PostgreSQL Schema
+
+## Meetings
+
+Stores meeting metadata.
+
+## Transcripts
+
+Stores all transcription segments.
+
+## Insights
+
+Stores AI-generated summaries and structured outputs.
+
+---
+
+# Redis Usage
+
+Redis is used for maintaining a bounded transcript context.
+
+Key:
+
+```text
+context:{roomId}
+```
+
+Behavior:
+
+- Latest 10 transcript segments
+- 1 hour TTL
+- Fast retrieval for AI summarization
+
+---
+
+# Reliability Features
+
+- Kafka-backed durability
+- Redis sliding context windows
+- AI retry mechanism
+- Graceful degradation
+- SSE auto-reconnect
+- Independent worker scaling
+- Media isolation from AI workloads
+- Structured logging
+- Retryable LLM requests
+- Fault-tolerant architecture
+
+---
+
+# Failure Handling
+
+## Whisper Failure
+
+- Error logged
+- Message skipped
+- System continues operating
+
+## LLM Failure
+
+- Retry up to 3 times
+- Fallback JSON returned
+- UI remains functional
+
+## Kafka Failure
+
+- Media communication unaffected
+- Analytics temporarily unavailable
+
+## Redis Failure
+
+- AI falls back to current transcript batch
+
+---
+
+# Performance Targets
+
+| Metric | Target |
+|----------|----------|
+| Call Setup Time | < 3 seconds |
+| Transcript Delay | < 10 seconds |
+| AI Refresh Time | 20-30 seconds |
+| Audio Chunk Size | 5 seconds |
+| Redis Context Window | 10 Segments |
+| Kafka Processing Latency | < 500ms |
+
+---
+
+# Environment Configuration
+
+Create:
+
+```bash
+cp workers/.env.example workers/.env
+```
+
+Example:
+
+```env
+LLM_PROVIDER=groq
+
+GROQ_API_KEY=your_api_key
+GROQ_MODEL=llama3-8b-8192
+
+KAFKA_BROKER=localhost:9094
+
+REDIS_URL=redis://localhost:6379
+
+DATABASE_URL=postgresql://user:password@localhost/db
+```
+
+---
+
+# Running The Platform
+
+## Docker
+
+```bash
 docker-compose up --build
 ```
 
-That's it. Open two browser tabs:
-- Tab 1: http://localhost:3000 → Click "Create Room"
-- Tab 2: http://localhost:3000 → Paste the room ID → Click "Join"
+---
 
-You can inspect the Go media server logs to see the audio chunking:
+## Local Development
+
 ```bash
-docker-compose logs -f media
+cd workers
+
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+python -m app.entrypoints.main
 ```
 
 ---
 
-## Future Roadmap
+# Future Roadmap
 
-The architecture is designed to support these future additions:
+## Phase 1
 
-### Phase 3 — AI Intelligence & Transcription
-- **Real-time transcription** using `faster-whisper` Python workers consuming from Kafka.
-- AI-powered media intelligence extraction (sentiment, topics, entities).
-- Redis for context windowing.
+- P2P Video Calls
+- Audio Calls
+- Room Management
 
-### Phase 4 — Analytics & Dashboard
-- **Real-time media analytics** dashboard.
-- Call quality metrics and monitoring.
-- SSE (Server-Sent Events) push updates to the frontend for live transcripts.
+## Phase 2
 
-### Phase 5 — Scale & Production
-- SFU (Selective Forwarding Unit) for group calls (migrating P2P to server-routed).
-- TURN server deployment for NAT traversal.
-- Kubernetes orchestration.
+- Media Ingestion
+- Kafka Event Streaming
+- Go Media Pipeline
+
+## Phase 3
+
+- Real-Time Transcription
+- AI Meeting Intelligence
+- SSE Updates
+
+## Phase 4
+
+- Speaker Diarization
+- Sentiment Analysis
+- Keyword Extraction
+
+## Phase 5
+
+- Video Intelligence
+- Face Detection
+- Engagement Analytics
+- Object Detection
+
+## Phase 6
+
+- SFU Architecture
+- Multi-Participant Calls
+- Horizontal Scaling
+
+## Phase 7
+
+- Kubernetes Deployment
+- Multi-Region Processing
+- Observability Stack
 
 ---
 
-## License
+# Future Media Intelligence Extensions
 
-MIT
+## Computer Vision
+
+- Face Detection
+- Face Recognition
+- Emotion Analysis
+- Liveness Detection
+- Attendance Tracking
+
+## Video Intelligence
+
+- Object Detection
+- Scene Understanding
+- Behavioral Analytics
+- Compliance Monitoring
+
+## Audio Intelligence
+
+- Speaker Diarization
+- Sentiment Analysis
+- Keyword Extraction
+- Compliance Monitoring
+
+## Multimodal AI
+
+- Audio + Video Correlation
+- Context-Aware Summaries
+- Speaker Activity Detection
+- Real-Time Insights
+
+---
+
+# Operational Troubleshooting
+
+## Kafka Connection Issues
+
+Verify:
+
+```bash
+docker ps
+```
+
+Ensure Kafka is healthy and reachable.
+
+---
+
+## Whisper Model Issues
+
+Pre-download model:
+
+```bash
+python -c "from faster_whisper import WhisperModel; WhisperModel('base')"
+```
+
+---
+
+## Import Errors
+
+Run:
+
+```bash
+python -m py_compile app/*.py app/**/*.py app/**/**/*.py
+```
+
+---
+
+## Redis Connection Issues
+
+Verify:
+
+```bash
+redis-cli ping
+```
+
+Expected:
+
+```text
+PONG
+```
+
+---
+
+# Project Goal
+
+Build a scalable foundation for transforming live media streams into actionable intelligence.
+
+The current implementation focuses on meeting intelligence, but the architecture is intentionally designed to support future computer vision, multimodal AI, and large-scale media analytics workloads without major redesign.

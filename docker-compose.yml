@@ -6,11 +6,14 @@ services:
       args:
         - VITE_SIGNALING_URL=ws://localhost:8080/ws
         - VITE_MEDIA_SERVER_URL=http://localhost:8080
+        - VITE_PUSH_SERVICE_URL=http://localhost:8082
     container_name: mip-frontend
     ports:
       - "3000:3000"
     depends_on:
       media:
+        condition: service_started
+      workers:
         condition: service_started
     restart: unless-stopped
 
@@ -73,3 +76,67 @@ services:
     volumes:
       - ./kafka/init-topics.sh:/init-topics.sh
     entrypoint: [ "bash", "/init-topics.sh" ]
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: mip-postgres
+    environment:
+      - POSTGRES_USER=meeting
+      - POSTGRES_PASSWORD=meeting
+      - POSTGRES_DB=meetingdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meeting -d meetingdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: mip-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  workers:
+    build:
+      context: ./workers
+    container_name: mip-workers
+    ports:
+      - "8082:8082"
+    env_file:
+      - ./workers/.env
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_USER=meeting
+      - POSTGRES_PASSWORD=meeting
+      - POSTGRES_DB=meetingdb
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    command: uvicorn app.entrypoints.main:app --host 0.0.0.0 --port 8082
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

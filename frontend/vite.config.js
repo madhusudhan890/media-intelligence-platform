@@ -18,6 +18,9 @@ export default defineConfig({
     ),
     'import.meta.env.VITE_MEDIA_SERVER_URL': JSON.stringify(
       process.env.VITE_MEDIA_SERVER_URL || 'http://localhost:8080'
+    ),
+    'import.meta.env.VITE_PUSH_SERVICE_URL': JSON.stringify(
+      process.env.VITE_PUSH_SERVICE_URL || 'http://localhost:8082'
     )
   }
 });
