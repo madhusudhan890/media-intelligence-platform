@@ -53,6 +53,17 @@ This architecture creates a foundation for future capabilities such as:
 # System Context
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#3b82f6'
+    primaryTextColor: '#ffffff'
+    primaryBorderColor: '#1d4ed8'
+    lineColor: '#60a5fa'
+    secondaryColor: '#10b981'
+    tertiaryColor: '#1e293b'
+---
 flowchart LR
 
 UserA[User A]
@@ -74,6 +85,17 @@ Platform --> LLM[LLM Provider]
 # High Level Architecture
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#3b82f6'
+    primaryTextColor: '#ffffff'
+    primaryBorderColor: '#1d4ed8'
+    lineColor: '#60a5fa'
+    secondaryColor: '#10b981'
+    tertiaryColor: '#1e293b'
+---
 flowchart TB
 
 subgraph Client Layer
@@ -122,6 +144,17 @@ Kafka --> SSE
 # End-to-End Architecture
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#3b82f6'
+    primaryTextColor: '#ffffff'
+    primaryBorderColor: '#1d4ed8'
+    lineColor: '#60a5fa'
+    secondaryColor: '#10b981'
+    tertiaryColor: '#1e293b'
+---
 graph TD
 
 A[Browser A]
@@ -155,6 +188,23 @@ SSE --> UI[React Dashboard]
 # WebRTC Connection Flow
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    actorBkg: '#3b82f6'
+    actorBorder: '#1d4ed8'
+    actorTextColor: '#ffffff'
+    actorLineColor: '#60a5fa'
+    signalColor: '#3b82f6'
+    signalTextColor: '#1e293b'
+    labelBoxBkgColor: '#f1f5f9'
+    labelBoxBorderColor: '#cbd5e1'
+    labelTextColor: '#0f172a'
+    noteBkgColor: '#fef08a'
+    noteBorderColor: '#ca8a04'
+    noteTextColor: '#854d0e'
+---
 sequenceDiagram
 
 participant A as Browser A
@@ -173,7 +223,7 @@ B->>A: SDP Answer
 A->>B: ICE Candidate
 B->>A: ICE Candidate
 
-A<->>B: Video & Audio Streams
+Note over A, B: Peer-to-Peer Video & Audio Streams
 ```
 
 ---
@@ -181,6 +231,17 @@ A<->>B: Video & Audio Streams
 # AI Processing Pipeline
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#3b82f6'
+    primaryTextColor: '#ffffff'
+    primaryBorderColor: '#1d4ed8'
+    lineColor: '#60a5fa'
+    secondaryColor: '#10b981'
+    tertiaryColor: '#1e293b'
+---
 flowchart LR
 
 Audio
@@ -210,6 +271,23 @@ SSE
 # Detailed Processing Sequence
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    actorBkg: '#3b82f6'
+    actorBorder: '#1d4ed8'
+    actorTextColor: '#ffffff'
+    actorLineColor: '#60a5fa'
+    signalColor: '#3b82f6'
+    signalTextColor: '#1e293b'
+    labelBoxBkgColor: '#f1f5f9'
+    labelBoxBorderColor: '#cbd5e1'
+    labelTextColor: '#0f172a'
+    noteBkgColor: '#fef08a'
+    noteBorderColor: '#ca8a04'
+    noteTextColor: '#854d0e'
+---
 sequenceDiagram
 
 autonumber
@@ -255,6 +333,17 @@ Kafka->>Frontend: SSE Update
 # Database Model
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    attributeBackgroundColor: '#f8fafc'
+    attributeTextColor: '#0f172a'
+    entityBackgroundColor: '#3b82f6'
+    entityBorderColor: '#1d4ed8'
+    entityTextColor: '#ffffff'
+    lineColor: '#60a5fa'
+---
 erDiagram
 
 MEETINGS ||--o{ TRANSCRIPTS : contains
