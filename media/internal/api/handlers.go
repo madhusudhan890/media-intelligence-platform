@@ -19,6 +19,7 @@ import (
 type OfferRequest struct {
 	RoomID string `json:"roomId"`
 	PeerID string `json:"peerId"`
+	Name   string `json:"name"`
 	SDP    string `json:"sdp"`
 }
 
@@ -78,7 +79,12 @@ func OfferHandler(webrtcAPI *webrtc.API, peerManager *mywebrtc.PeerManager, kafk
 
 		log.Printf("Received offer from Peer: %s in Room: %s", req.PeerID, req.RoomID)
 
-		peer, err := mywebrtc.NewPeer(req.RoomID, req.PeerID, webrtcAPI, peerManager, kafkaProd)
+		name := req.Name
+		if name == "" {
+			name = "Anonymous"
+		}
+
+		peer, err := mywebrtc.NewPeer(req.RoomID, req.PeerID, name, webrtcAPI, peerManager, kafkaProd)
 		if err != nil {
 			log.Printf("Failed to create peer: %v", err)
 			http.Error(w, "Failed to create peer", http.StatusInternalServerError)

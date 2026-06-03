@@ -18,6 +18,7 @@ import (
 type AudioChunkMessage struct {
 	RoomID     string `json:"roomId"`
 	PeerID     string `json:"peerId"`
+	PeerName   string `json:"peerName"`
 	ChunkID    string `json:"chunkId"`
 	Timestamp  string `json:"timestamp"`
 	DurationMs int    `json:"durationMs"`
@@ -77,10 +78,11 @@ func ensureTopicExists(brokers, topic string) {
 	}
 }
 
-func (kp *Producer) PublishChunk(ctx context.Context, roomID, peerID, chunkID string, audioBytes []byte) error {
+func (kp *Producer) PublishChunk(ctx context.Context, roomID, peerID, peerName, chunkID string, audioBytes []byte) error {
 	msg := AudioChunkMessage{
 		RoomID:     roomID,
 		PeerID:     peerID,
+		PeerName:   peerName,
 		ChunkID:    chunkID,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 		DurationMs: 5000,

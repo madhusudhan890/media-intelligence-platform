@@ -1,1 +1,1 @@
-from .factory import fetch_ai_insights, get_llm_provider
+from .factory import LLMProviderFactory, fetch_ai_insights

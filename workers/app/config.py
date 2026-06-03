@@ -15,6 +15,17 @@ for env_file in [".env", "../.env", "../../.env"]:
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9094")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 
+# Whisper Configuration
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "en")
+WHISPER_INITIAL_PROMPT = os.getenv("WHISPER_INITIAL_PROMPT", "Real-time transcription of a meeting.")
+WHISPER_VAD_FILTER = os.getenv("WHISPER_VAD_FILTER", "true").lower() in ("true", "1", "yes")
+
+# AI Insights Configuration
+AI_INSIGHT_TRIGGER_EVERY = int(os.getenv("AI_INSIGHT_TRIGGER_EVERY", "2"))
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_API_URL = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")

@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"sync"
@@ -8,26 +9,29 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
 	"media-server/internal/kafka"
 )
 
 type AudioProcessor struct {
 	RoomID     string
 	PeerID     string
+	PeerName   string
 	kafkaProd  *kafka.Producer
-	buffer     []byte
+	oggBuf     *bytes.Buffer
+	oggWriter  *oggwriter.OggWriter
 	mu         sync.Mutex
 	stopChan   chan struct{}
 	ticker     *time.Ticker
 	processing bool
 }
 
-func NewAudioProcessor(roomID, peerID string, kafkaProd *kafka.Producer) *AudioProcessor {
+func NewAudioProcessor(roomID, peerID, peerName string, kafkaProd *kafka.Producer) *AudioProcessor {
 	return &AudioProcessor{
 		RoomID:    roomID,
 		PeerID:    peerID,
+		PeerName:  peerName,
 		kafkaProd: kafkaProd,
-		buffer:    make([]byte, 0),
 		stopChan:  make(chan struct{}),
 	}
 }
@@ -60,13 +64,21 @@ func (ap *AudioProcessor) Stop() {
 		ap.ticker.Stop()
 	}
 	close(ap.stopChan)
-	// Flush remaining buffer without re-locking
 	ap.flushBufferLocked()
+}
+
+func (ap *AudioProcessor) initWriter(sampleRate uint32, channels uint16) error {
+	ap.oggBuf = new(bytes.Buffer)
+	w, err := oggwriter.NewWith(ap.oggBuf, sampleRate, channels)
+	if err != nil {
+		return err
+	}
+	ap.oggWriter = w
+	return nil
 }
 
 func (ap *AudioProcessor) readRTP(track *webrtc.TrackRemote) {
 	for {
-		// Read RTP packets
 		packet, _, err := track.ReadRTP()
 		if err != nil {
 			ap.mu.Lock()
@@ -80,9 +92,26 @@ func (ap *AudioProcessor) readRTP(track *webrtc.TrackRemote) {
 		}
 
 		ap.mu.Lock()
-		// Store the raw RTP payload (Opus data usually)
-		// For this phase, we just concatenate payloads. In future, this would be proper decoding.
-		ap.buffer = append(ap.buffer, packet.Payload...)
+		if ap.processing {
+			if ap.oggWriter == nil {
+				channels := track.Codec().Channels
+				if channels == 0 {
+					channels = 2
+				}
+				sampleRate := track.Codec().ClockRate
+				if sampleRate == 0 {
+					sampleRate = 48000
+				}
+				if err := ap.initWriter(sampleRate, channels); err != nil {
+					log.Printf("Failed to initialize OggWriter for peer %s: %v", ap.PeerID, err)
+					ap.mu.Unlock()
+					continue
+				}
+			}
+			if err := ap.oggWriter.WriteRTP(packet); err != nil {
+				log.Printf("Failed to write RTP to OggWriter for peer %s: %v", ap.PeerID, err)
+			}
+		}
 		ap.mu.Unlock()
 	}
 }
@@ -105,23 +134,29 @@ func (ap *AudioProcessor) flushBuffer() {
 }
 
 func (ap *AudioProcessor) flushBufferLocked() {
-	if len(ap.buffer) == 0 {
+	if ap.oggWriter == nil || ap.oggBuf == nil || ap.oggBuf.Len() == 0 {
 		return
 	}
-	
-	// Copy buffer to process and reset original buffer
-	dataToProcess := make([]byte, len(ap.buffer))
-	copy(dataToProcess, ap.buffer)
-	ap.buffer = ap.buffer[:0] // Retain capacity, clear length
+
+	// Close the current OggWriter to write headers and trailers properly
+	if err := ap.oggWriter.Close(); err != nil {
+		log.Printf("Error closing OggWriter for peer %s: %v", ap.PeerID, err)
+	}
+
+	// Copy data out of the buffer and reset OggWriter/Buffer for the next 5 seconds
+	dataToProcess := make([]byte, ap.oggBuf.Len())
+	copy(dataToProcess, ap.oggBuf.Bytes())
+
+	ap.oggWriter = nil
+	ap.oggBuf = nil
 
 	chunkID := uuid.New().String()
 
 	if ap.kafkaProd != nil {
-		// Each goroutine gets its own context so it isn't canceled when this function returns
 		go func(data []byte, cID string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err := ap.kafkaProd.PublishChunk(ctx, ap.RoomID, ap.PeerID, cID, data)
+			err := ap.kafkaProd.PublishChunk(ctx, ap.RoomID, ap.PeerID, ap.PeerName, cID, data)
 			if err != nil {
 				log.Printf("Error publishing audio chunk for %s: %v", ap.PeerID, err)
 			}

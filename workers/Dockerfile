@@ -20,4 +20,4 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', dev
 COPY . .
 
 # Default command (can be overridden in docker-compose)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8082"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8082"]

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS transcripts (
     id UUID PRIMARY KEY,
     room_id TEXT NOT NULL,
     peer_id TEXT NOT NULL,
+    peer_name TEXT DEFAULT 'Anonymous',
     chunk_id TEXT NOT NULL,
     text TEXT NOT NULL,
     confidence FLOAT NOT NULL,

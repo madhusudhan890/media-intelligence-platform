@@ -30,13 +30,14 @@ function logICE(direction, candidate) {
   }
 }
 
-export default function useWebRTC(roomId) {
+export default function useWebRTC(roomId, userName) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [connectionState, setConnectionState] = useState('disconnected');
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [error, setError] = useState(null);
+  const [peerNames, setPeerNames] = useState({});
 
   const wsRef = useRef(null);
   const pcRef = useRef(null); // P2P PeerConnection
@@ -52,6 +53,15 @@ export default function useWebRTC(roomId) {
   const hasRemoteDescRef = useRef(false);
   const makingOfferRef = useRef(false);
   const initGenRef = useRef(0);
+  const userNameRef = useRef(userName);
+  userNameRef.current = userName;
+
+  useEffect(() => {
+    setPeerNames((prev) => ({
+      ...prev,
+      [peerIdRef.current]: userName || 'You'
+    }));
+  }, [userName]);
 
   roomIdRef.current = roomId;
 
@@ -199,6 +209,7 @@ export default function useWebRTC(roomId) {
         body: JSON.stringify({
           roomId: roomIdRef.current,
           peerId: peerIdRef.current,
+          name: userNameRef.current || 'Anonymous',
           sdp: pc.localDescription.sdp,
         }),
       });
@@ -485,9 +496,11 @@ export default function useWebRTC(roomId) {
         type: 'join',
         roomId: roomIdRef.current,
         peerId: peerIdRef.current,
-        payload: {}
+        payload: {
+          name: userNameRef.current || 'Anonymous'
+        }
       };
-      log('SIGNALING', 'Sending JOIN', { roomId: joinMsg.roomId, peerId: joinMsg.peerId });
+      log('SIGNALING', 'Sending JOIN', { roomId: joinMsg.roomId, peerId: joinMsg.peerId, name: joinMsg.payload.name });
       sendSignal(joinMsg);
     };
 
@@ -508,9 +521,21 @@ export default function useWebRTC(roomId) {
           log('ROOM', 'Joined room successfully', { peers: payload.peers, isReconnect: payload.isReconnect });
           setConnectionState('waiting');
 
-          const otherPeers = payload.peers.filter((p) => p !== peerIdRef.current);
+          // Update peer names mapping
+          const namesMap = {};
+          if (payload.peers && Array.isArray(payload.peers)) {
+            payload.peers.forEach((p) => {
+              if (p && p.peerId) {
+                namesMap[p.peerId] = p.name || 'Anonymous';
+              }
+            });
+          }
+          namesMap[peerIdRef.current] = userNameRef.current || 'You';
+          setPeerNames((prev) => ({ ...prev, ...namesMap }));
+
+          const otherPeers = (payload.peers || []).filter((p) => p && p.peerId !== peerIdRef.current);
           if (otherPeers.length > 0) {
-            const targetPeer = otherPeers[0];
+            const targetPeer = otherPeers[0].peerId;
             remotePeerIdRef.current = targetPeer;
             log('ROOM', 'Other peer already in room, initiating offer', { targetPeer });
             createPeerConnection(stream, targetPeer);
@@ -523,8 +548,16 @@ export default function useWebRTC(roomId) {
 
         case 'peer-joined': {
           const newPeerId = payload.peerId;
-          log('ROOM', 'Peer joined room', { newPeerId });
+          const newPeerName = payload.name || 'Anonymous';
+          log('ROOM', 'Peer joined room', { newPeerId, name: newPeerName });
           remotePeerIdRef.current = newPeerId;
+
+          // Update peer names mapping
+          setPeerNames((prev) => ({
+            ...prev,
+            [newPeerId]: newPeerName
+          }));
+
           setConnectionState('connecting');
           createPeerConnection(stream, newPeerId);
           break;
@@ -726,6 +759,8 @@ export default function useWebRTC(roomId) {
     init,
     cleanup,
     toggleAudio,
-    toggleVideo
+    toggleVideo,
+    peerNames,
+    peerId: peerIdRef.current
   };
 }

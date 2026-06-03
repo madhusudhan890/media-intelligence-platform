@@ -17,6 +17,7 @@ import (
 type Peer struct {
 	RoomID         string
 	PeerID         string
+	Name           string
 	PC             *pionwebrtc.PeerConnection
 	AudioProcessor *AudioProcessor
 	closeOnce      sync.Once
@@ -64,7 +65,7 @@ func (m *PeerManager) CloseAll() {
 	}
 }
 
-func NewPeer(roomID, peerID string, webrtcAPI *pionwebrtc.API, peerManager *PeerManager, kafkaProd *kafka.Producer) (*Peer, error) {
+func NewPeer(roomID, peerID, name string, webrtcAPI *pionwebrtc.API, peerManager *PeerManager, kafkaProd *kafka.Producer) (*Peer, error) {
 	if webrtcAPI == nil {
 		return nil, errors.New("webrtc API not initialized")
 	}
@@ -81,11 +82,12 @@ func NewPeer(roomID, peerID string, webrtcAPI *pionwebrtc.API, peerManager *Peer
 		return nil, err
 	}
 
-	processor := NewAudioProcessor(roomID, peerID, kafkaProd)
+	processor := NewAudioProcessor(roomID, peerID, name, kafkaProd)
 
 	peer := &Peer{
 		RoomID:         roomID,
 		PeerID:         peerID,
+		Name:           name,
 		PC:             pc,
 		AudioProcessor: processor,
 	}

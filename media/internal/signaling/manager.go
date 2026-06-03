@@ -15,6 +15,7 @@ import (
 
 type Peer struct {
 	ID   string
+	Name string
 	Conn *websocket.Conn
 	mu   sync.Mutex // Protects concurrent writes to WebSocket
 }
@@ -66,15 +67,18 @@ func (m *Manager) GetRoomInfo(roomID string) (map[string]interface{}, bool) {
 		return nil, false
 	}
 	
-	peerIDs := make([]string, 0, len(room.Peers))
-	for id := range room.Peers {
-		peerIDs = append(peerIDs, id)
+	peersList := make([]map[string]string, 0, len(room.Peers))
+	for _, p := range room.Peers {
+		peersList = append(peersList, map[string]string{
+			"peerId": p.ID,
+			"name":   p.Name,
+		})
 	}
 	
 	return map[string]interface{}{
 		"roomId":    room.ID,
 		"peerCount": len(room.Peers),
-		"peers":     peerIDs,
+		"peers":     peersList,
 		"createdAt": room.CreatedAt,
 	}, true
 }
@@ -93,7 +97,7 @@ func (m *Manager) EnsureRoomExists(roomID string) {
 	}
 }
 
-func (m *Manager) JoinRoom(roomID, peerID string, conn *websocket.Conn) ([]string, bool) {
+func (m *Manager) JoinRoom(roomID, peerID, name string, conn *websocket.Conn) ([]map[string]string, bool) {
 	m.EnsureRoomExists(roomID)
 	
 	m.mu.Lock()
@@ -110,14 +114,18 @@ func (m *Manager) JoinRoom(roomID, peerID string, conn *websocket.Conn) ([]strin
 	
 	peer := &Peer{
 		ID:   peerID,
+		Name: name,
 		Conn: conn,
 	}
 	room.Peers[peerID] = peer
 	
-	// Get current peers
-	peerIDs := make([]string, 0, len(room.Peers))
-	for id := range room.Peers {
-		peerIDs = append(peerIDs, id)
+	// Get current peers with names
+	peersList := make([]map[string]string, 0, len(room.Peers))
+	for _, p := range room.Peers {
+		peersList = append(peersList, map[string]string{
+			"peerId": p.ID,
+			"name":   p.Name,
+		})
 	}
 	
 	// Notify others in room
@@ -129,13 +137,14 @@ func (m *Manager) JoinRoom(roomID, peerID string, conn *websocket.Conn) ([]strin
 				"peerId": id,
 				"payload": map[string]string{
 					"peerId": peerID,
+					"name":   name,
 				},
 			}
 			go otherPeer.Send(msg)
 		}
 	}
 	
-	return peerIDs, isReconnect
+	return peersList, isReconnect
 }
 
 func (m *Manager) LeaveRoom(roomID, peerID string) {

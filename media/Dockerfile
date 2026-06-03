@@ -21,6 +21,6 @@ WORKDIR /app
 # Copy the binary from builder
 COPY --from=builder /app/media-server .
 
-EXPOSE 8081
+EXPOSE 8080
 
 CMD ["./media-server"]

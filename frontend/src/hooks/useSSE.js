@@ -76,7 +76,20 @@ export default function useSSE(roomId) {
               return [...prev, payload.data];
             });
           } else if (payload.type === 'insight') {
-            setInsights(payload.data);
+            setInsights((prev) => {
+              const isError = payload.data.topics?.includes('Error') || 
+                              payload.data.summary?.startsWith('Could not generate');
+              if (isError && prev.summary && !prev.summary.startsWith('Could not generate')) {
+                return {
+                  ...prev,
+                  updateError: 'Failed to update insights. We will retry shortly.'
+                };
+              }
+              return {
+                ...payload.data,
+                updateError: isError ? 'Failed to generate insights. We will retry shortly.' : null
+              };
+            });
           }
         } catch (err) {
           console.error('[useSSE] Failed to parse SSE event data:', err);

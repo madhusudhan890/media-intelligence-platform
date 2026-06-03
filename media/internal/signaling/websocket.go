@@ -88,7 +88,15 @@ func WSHandler(manager *Manager) http.HandlerFunc {
 				currentRoomID = roomID
 				currentPeerID = peerID
 
-				peers, isReconnect := manager.JoinRoom(roomID, peerID, conn)
+				var name string
+				if payload, ok := msg["payload"].(map[string]interface{}); ok {
+					name, _ = payload["name"].(string)
+				}
+				if name == "" {
+					name = "Anonymous"
+				}
+
+				peers, isReconnect := manager.JoinRoom(roomID, peerID, name, conn)
 				
 				response := map[string]interface{}{
 					"type":   "joined",
