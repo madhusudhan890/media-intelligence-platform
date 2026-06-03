@@ -11,6 +11,7 @@ function Room() {
   const navigate = useNavigate();
   const location = useLocation();
   const cleanupRef = useRef(null);
+  const userName = location.state?.userName || 'Anonymous';
   const {
     localStream,
     remoteStream,
@@ -21,8 +22,10 @@ function Room() {
     init,
     cleanup,
     toggleAudio,
-    toggleVideo
-  } = useWebRTC(roomId);
+    toggleVideo,
+    peerNames,
+    peerId
+  } = useWebRTC(roomId, userName);
 
   const {
     transcripts,
@@ -202,19 +205,23 @@ function Room() {
                     <p>Waiting for speech to transcribe...</p>
                   </div>
                 ) : (
-                  transcripts.map((t, idx) => (
-                    <div key={t.chunkId || idx} className="transcript-item">
-                      <div className="transcript-meta">
-                        <span className="speaker-name">
-                          {t.peerId === 'local' || t.peerId === 'You' ? 'You' : `Speaker ${t.peerId.slice(0, 8)}`}
-                        </span>
-                        <span className="transcript-time">
-                          {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                        </span>
+                  transcripts.map((t, idx) => {
+                    const isLocal = t.peerId === 'local' || t.peerId === 'You' || t.peerId === peerId;
+                    const speakerName = isLocal
+                      ? (peerNames?.[peerId] ? `${peerNames[peerId]} (You)` : (t.peerName ? `${t.peerName} (You)` : 'You'))
+                      : (t.peerName || peerNames?.[t.peerId] || `Speaker ${t.peerId.slice(0, 8)}`);
+                    return (
+                      <div key={t.chunkId || idx} className="transcript-item">
+                        <div className="transcript-meta">
+                          <span className="speaker-name">{speakerName}</span>
+                          <span className="transcript-time">
+                            {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="transcript-text">{t.text}</p>
                       </div>
-                      <p className="transcript-text">{t.text}</p>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
                 <div ref={transcriptsEndRef} />
               </div>
@@ -229,7 +236,38 @@ function Room() {
                 <h3>Meeting Insights</h3>
               </div>
               <div className="panel-content insights-body">
-                {!insights.summary && insights.topics.length === 0 ? (
+                {insights.updateError && (
+                  <div className="insights-update-warning" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    color: '#fbbf24',
+                    fontSize: '0.8rem',
+                    marginBottom: '4px'
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.2" />
+                      <path d="M8 5V9M8 11V11.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    <span>{insights.updateError}</span>
+                  </div>
+                )}
+
+                {insights.topics?.includes('Error') && (!insights.summary || insights.summary.startsWith('Could not generate')) ? (
+                  <div className="panel-empty-state">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--status-warning)', marginBottom: '8px' }}>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <p style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>AI Pipeline Offline</p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>The AI summarization service is currently offline or under heavy load. Retrying shortly...</p>
+                  </div>
+                ) : !insights.summary && (!insights.topics || insights.topics.length === 0) ? (
                   <div className="panel-empty-state">
                     <p>Insights will generate once transcripts accumulate...</p>
                   </div>

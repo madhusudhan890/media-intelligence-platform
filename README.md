@@ -1,16 +1,22 @@
-# Real-Time Media Intelligence Platform
+# OMNISIGHT: Real-Time AI-Driven P2P Media Intelligence Platform
 
-An enterprise-grade, event-driven media intelligence platform that combines real-time WebRTC communication with AI-powered transcription and meeting analytics.
+> **"I built this because meeting platforms like Teams and Meet give you a wall of raw transcript text after the call. Nobody reads it. This platform extracts structured intelligence — action items with owners, decisions made, open questions — in real time, while the meeting is happening. Built on WebRTC (Pion), Golang, Kafka, Python, and Groq."**
 
-Users can join a video call, communicate through low-latency peer-to-peer audio/video streams, and receive live AI-generated insights including:
+---
 
-- Meeting summaries
-- Action items
-- Decisions
-- Deadlines
-- Risks and blockers
+## 💡 The Core Problem
+Most modern video conferencing platforms (Zoom, Teams, Google Meet) focus heavily on transport latency but treat post-meeting intelligence as an afterthought. After a call, you receive a long, unstructured wall of transcribed text.
+* **Transcripts are unread:** Nobody has the time to read through thousands of lines of raw speech.
+* **Delayed Actionability:** Decisions, open questions, and tasks are buried, requiring manual parsing post-meeting.
+* **Compute Overhead:** Standard in-line AI processing on video channels can choke media server performance, degrading real-time call quality.
 
-The platform is designed with a distributed architecture that separates media transport from AI workloads, ensuring that communication quality remains unaffected even during transcription or LLM processing.
+## 🚀 The Solution: OMNISIGHT
+OMNISIGHT is an **enterprise-grade, event-driven cognitive media platform** designed to solve this. It splits real-time peer-to-peer WebRTC communication from background AI pipelines using a highly scalable, distributed event broker (Kafka).
+
+While participants communicate in a call:
+1. **Real-time Acoustic Ingestion:** A Go-based media pipeline (built on Pion WebRTC) captures peer audio tracks and streams them directly to Kafka.
+2. **Diarized Speech-to-Text:** Asynchronous Python workers consume the audio streams and run local, diarized `faster-whisper` models to produce text logs.
+3. **Cognitive Synthesis (Groq/Gemini):** A sliding context window managed via Redis feeds diarized transcripts to high-speed LLMs (like Llama 3 via Groq) to extract and push structured meeting intelligence (action items with owners, decisions, deadlines, risks) **live, while the meeting is happening** over Server-Sent Events (SSE).
 
 ---
 
@@ -478,7 +484,7 @@ workers/app/
 │   ├── postgres/
 │   ├── whisper/
 │   └── llm/
-└── entrypoints/
+└── main.py
 ```
 
 Benefits:
@@ -652,7 +658,7 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-python -m app.entrypoints.main
+python -m app.main
 ```
 
 ---

@@ -4,6 +4,7 @@ from typing import List
 class AudioChunkMessage(BaseModel):
     roomId: str
     peerId: str
+    peerName: str = "Anonymous"
     chunkId: str
     timestamp: str
     durationMs: int
@@ -12,6 +13,7 @@ class AudioChunkMessage(BaseModel):
 class TranscriptMessage(BaseModel):
     roomId: str
     peerId: str
+    peerName: str = "Anonymous"
     chunkId: str
     text: str
     confidence: float

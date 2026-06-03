@@ -5,11 +5,19 @@ const MEDIA_SERVER_URL = import.meta.env.VITE_MEDIA_SERVER_URL || 'http://localh
 
 function Home() {
   const navigate = useNavigate();
+  const [name, setName] = useState('');
   const [roomInput, setRoomInput] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');
 
   const handleCreateRoom = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError('Please enter your name first');
+      return;
+    }
+
     setIsCreating(true);
     setError('');
 
@@ -24,7 +32,7 @@ function Home() {
       }
 
       const data = await response.json();
-      navigate(`/room/${data.roomId}`, { state: { fromHome: true } });
+      navigate(`/room/${data.roomId}`, { state: { fromHome: true, userName: trimmedName } });
     } catch (err) {
       console.error('[Home] Failed to create room:', err);
       setError('Failed to create room. Is the signaling server running?');
@@ -33,14 +41,36 @@ function Home() {
     }
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     setError('');
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError('Please enter your name first');
+      return;
+    }
     const trimmed = roomInput.trim();
     if (!trimmed) {
       setError('Please enter a room ID');
       return;
     }
-    navigate(`/room/${trimmed}`, { state: { fromHome: true } });
+
+    setIsJoining(true);
+    try {
+      const response = await fetch(`${MEDIA_SERVER_URL}/rooms/${trimmed}`);
+      if (response.status === 404) {
+        setError('Room not found. Please verify the room ID or create a new one.');
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Failed to verify room');
+      }
+      navigate(`/room/${trimmed}`, { state: { fromHome: true, userName: trimmedName } });
+    } catch (err) {
+      console.error('[Home] Failed to verify room:', err);
+      setError('Failed to join room. Is the signaling server running?');
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -72,17 +102,32 @@ function Home() {
               </defs>
             </svg>
           </div>
-          <h1 className="home-title">Media Intelligence</h1>
+          <h1 className="home-title">OMNISIGHT</h1>
           <p className="home-subtitle">
-            Real-time peer-to-peer video communication<br />
-            powered by WebRTC
+            AI-Driven P2P Media Intelligence Platform
           </p>
         </div>
 
         <div className="home-card">
           <div className="card-section">
-            <h2 className="card-section-title">Start a conversation</h2>
-            <p className="card-section-desc">Create a new room and share the ID with your peer</p>
+            <h2 className="card-section-title">Identity Registration</h2>
+            <input
+              id="user-name-input"
+              type="text"
+              className="input"
+              placeholder="e.g. John Doe"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="card-divider">
+            <span className="divider-text">Orchestration Nodes</span>
+          </div>
+
+          <div className="card-section">
+            <h2 className="card-section-title">Spawn Cognitive Session</h2>
+            <p className="card-section-desc">Initialize an isolated session room with dedicated event pipelines, Kafka routing, and low-latency P2P loops.</p>
             <button
               id="create-room-btn"
               className="btn btn-primary"
@@ -92,14 +137,14 @@ function Home() {
               {isCreating ? (
                 <span className="btn-loading">
                   <span className="spinner"></span>
-                  Creating...
+                  Allocating Node Resources...
                 </span>
               ) : (
                 <>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="btn-icon">
                     <path d="M10 4V16M4 10H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
-                  Create Room
+                  Initialize Room Node
                 </>
               )}
             </button>
@@ -110,14 +155,14 @@ function Home() {
           </div>
 
           <div className="card-section">
-            <h2 className="card-section-title">Join existing room</h2>
-            <p className="card-section-desc">Enter a room ID to join an active session</p>
+            <h2 className="card-section-title">Attach to Active Registry</h2>
+            <p className="card-section-desc">Establish direct P2P connection to a running signaling registry by providing its cryptographic Room ID token.</p>
             <div className="input-group">
               <input
                 id="room-id-input"
                 type="text"
                 className="input"
-                placeholder="Paste room ID here..."
+                placeholder="Enter Room UUID..."
                 value={roomInput}
                 onChange={(e) => setRoomInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -126,11 +171,21 @@ function Home() {
                 id="join-room-btn"
                 className="btn btn-secondary"
                 onClick={handleJoinRoom}
+                disabled={isJoining}
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="btn-icon">
-                  <path d="M3 10H14M10 6L14 10L10 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Join
+                {isJoining ? (
+                  <span className="btn-loading">
+                    <span className="spinner"></span>
+                    Negotiating...
+                  </span>
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="btn-icon">
+                      <path d="M3 10H14M10 6L14 10L10 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Establish Link
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -144,10 +199,64 @@ function Home() {
               {error}
             </div>
           )}
+
+          <div className="card-divider">
+            <span className="divider-text">Platform Capabilities</span>
+          </div>
+
+          <div className="capabilities-bullets">
+            <div className="bullet-item">
+              <span className="bullet-symbol">*</span>
+              <span className="bullet-text">Decentralized communication network integrating real-time WebRTC media streams</span>
+            </div>
+            <div className="bullet-item">
+              <span className="bullet-symbol">*</span>
+              <span className="bullet-text">Automated cognitive processing with diarized transcript logs</span>
+            </div>
+            <div className="bullet-item">
+              <span className="bullet-symbol">*</span>
+              <span className="bullet-text">AI-driven semantic synthesis and intelligent summaries</span>
+            </div>
+          </div>
+
+          <div className="card-divider">
+            <span className="divider-text">Topology & Telemetry Spec</span>
+          </div>
+
+          <div className="specs-grid">
+            <div className="spec-item">
+              <span className="spec-status green"></span>
+              <div className="spec-details">
+                <span className="spec-label">Transport Protocol</span>
+                <span className="spec-val">Secure WebRTC P2P Mesh</span>
+              </div>
+            </div>
+            <div className="spec-item">
+              <span className="spec-status purple"></span>
+              <div className="spec-details">
+                <span className="spec-label">Data Ingest Pipeline</span>
+                <span className="spec-val">Distributed Kafka Event Broker</span>
+              </div>
+            </div>
+            <div className="spec-item">
+              <span className="spec-status blue"></span>
+              <div className="spec-details">
+                <span className="spec-label">Acoustic Pipeline</span>
+                <span className="spec-val">Diarized Whisper Inference</span>
+              </div>
+            </div>
+            <div className="spec-item">
+              <span className="spec-status gold"></span>
+              <div className="spec-details">
+                <span className="spec-label">Cognitive Layer</span>
+                <span className="spec-val">AI-Driven LLM Semantic Engine</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="home-footer">
-          <p>Phase 1 — P2P Communication Foundation</p>
+          <p>OMNISIGHT CORE NODE PROTOCOLS SECURED BY END-TO-END TELEMETRY</p>
         </div>
       </div>
     </div>

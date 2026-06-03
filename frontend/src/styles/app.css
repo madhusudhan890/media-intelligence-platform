@@ -417,6 +417,123 @@ body {
   letter-spacing: 0.05em;
 }
 
+/* Home Page Spec & Eyebrow Styles */
+.home-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--accent-secondary);
+  background: var(--accent-subtle);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.05);
+}
+
+.specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.spec-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  transition: all var(--transition-fast);
+}
+
+.spec-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-medium);
+  transform: translateY(-1px);
+}
+
+.spec-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.spec-status.green {
+  color: var(--status-on);
+  background: var(--status-on);
+}
+
+.spec-status.purple {
+  color: var(--accent-secondary);
+  background: var(--accent-secondary);
+}
+
+.spec-status.blue {
+  color: var(--status-info);
+  background: var(--status-info);
+}
+
+.spec-status.gold {
+  color: var(--status-warning);
+  background: var(--status-warning);
+}
+
+.spec-details {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.spec-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.spec-val {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Capabilities Bullet List */
+.capabilities-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.bullet-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.bullet-symbol {
+  color: var(--accent-secondary);
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.bullet-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* ============================================================
    Room Page
    ============================================================ */
@@ -547,29 +664,47 @@ body {
 
 /* Video Grid */
 .video-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   min-height: 0;
 }
 
 .video-cell {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  position: relative;
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
 }
 
 .video-cell-remote {
-  flex: 3;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
 .video-cell-local {
-  flex: 1;
-  max-height: 200px;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 190px;
+  height: 142.5px;
+  z-index: 5;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  background: var(--bg-secondary);
+  transition: all var(--transition-base);
+}
+
+.video-cell-local:hover {
+  transform: scale(1.04);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-lg), 0 0 20px var(--accent-glow);
 }
 
 /* Video Player */
@@ -786,7 +921,11 @@ body {
   }
 
   .video-cell-local {
-    max-height: 150px;
+    width: 130px;
+    height: 97.5px;
+    bottom: 12px;
+    right: 12px;
+    border-radius: var(--radius-sm);
   }
 
   .control-btn {
@@ -799,20 +938,6 @@ body {
   }
 }
 
-@media (min-width: 768px) {
-  .video-grid {
-    flex-direction: row;
-  }
-
-  .video-cell-remote {
-    flex: 3;
-  }
-
-  .video-cell-local {
-    flex: 1;
-    max-height: none;
-  }
-}
 
 @media (min-width: 1024px) {
   .control-btn {

@@ -4,7 +4,7 @@ import httpx
 import asyncio
 from app.adapters.llm.base import BaseLLMProvider, SYSTEM_PROMPT, USER_PROMPT, get_fallback_insight_structure
 
-logger = logging.getLogger("openai_llm_adapter")
+logger = logging.getLogger("uvicorn.error.openai_llm_adapter")
 
 class OpenAICompatibleProvider(BaseLLMProvider):
     def __init__(self, api_url: str, api_key: str, model_name: str, provider_name: str):
@@ -35,7 +35,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             "temperature": 0.2
         }
         
-        if self.provider_name in ["groq", "openai"]:
+        if self.provider_name in ["groq", "openai", "gemini"]:
             payload["response_format"] = {"type": "json_object"}
 
         max_attempts = 3
@@ -48,9 +48,40 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                         await asyncio.sleep(2)
                         continue
 
-                    res_json = response.json()
+                    try:
+                        res_json = response.json()
+                    except Exception as json_err:
+                        logger.warning(f"{self.provider_name} API response could not be parsed as JSON: {response.text}. Error: {json_err}")
+                        await asyncio.sleep(2)
+                        continue
+
+                    if not res_json.get("choices"):
+                        logger.warning(f"{self.provider_name} API returned no choices: {res_json}. Attempt {attempt}/{max_attempts}")
+                        await asyncio.sleep(2)
+                        continue
+
                     content = res_json["choices"][0]["message"]["content"]
-                    parsed_data = json.loads(content)
+                    if not content:
+                        logger.warning(f"{self.provider_name} API returned empty content. Choice: {res_json['choices'][0]}")
+                        await asyncio.sleep(2)
+                        continue
+
+                    # Clean markdown code blocks from content if present
+                    content_clean = content.strip()
+                    if content_clean.startswith("```"):
+                        lines = content_clean.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].startswith("```"):
+                            lines = lines[:-1]
+                        content_clean = "\n".join(lines).strip()
+
+                    try:
+                        parsed_data = json.loads(content_clean)
+                    except Exception as parse_err:
+                        logger.warning(f"{self.provider_name} API failed to parse content as JSON: {content}. Error: {parse_err}")
+                        await asyncio.sleep(2)
+                        continue
                     
                     required_keys = ["summary", "topics", "decisions", "action_items", "deadlines", "risks"]
                     for key in required_keys:
